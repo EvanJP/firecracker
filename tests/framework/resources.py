@@ -5,7 +5,7 @@
 import urllib
 
 from framework.defs import API_USOCKET_URL_PREFIX
-
+import framework.models 
 
 class Actions():
     """Facility for sending operations instructions on the microvm."""
