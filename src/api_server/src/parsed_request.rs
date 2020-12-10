@@ -675,17 +675,13 @@ pub(crate) mod tests {
     fn test_try_from_put_logger() {
         let (mut sender, receiver) = UnixStream::pair().unwrap();
         let mut connection = HttpConnection::new(receiver);
-
-        let req_as_bytes = b"PUT /logger HTTP/1.1\r\n\
-                Content-Type: application/json\r\n\
-                Content-Length: 91\r\n\r\n{ \
-                \"log_path\": \"string\", \
-                \"level\": \"Warning\", \
-                \"show_level\": false, \
-                \"show_log_origin\": false \
-            }";
-
-        sender.write_all(req_as_bytes).unwrap();
+        let body = "{ \
+            \"log_path\": \"string\", \
+            \"level\": \"Warning\", \
+            \"show_level\": false, \
+            \"show_log_origin\": false \
+        }";
+        sender.write_all(http_request("PUT", "/logger", &body).as_bytes()).unwrap();
         assert!(connection.try_read().is_ok());
         let req = connection.pop_parsed_request().unwrap();
         assert!(ParsedRequest::try_from_request(&req).is_ok());
@@ -695,15 +691,14 @@ pub(crate) mod tests {
     fn test_try_from_put_machine_config() {
         let (mut sender, receiver) = UnixStream::pair().unwrap();
         let mut connection = HttpConnection::new(receiver);
+        let body = "{ \
+            \"vcpu_count\": 0, \
+            \"mem_size_mib\": 0, \
+            \"ht_enabled\": true \
+        }";
         sender
             .write_all(
-                b"PUT /machine-config HTTP/1.1\r\n\
-                Content-Type: application/json\r\n\
-                Content-Length: 58\r\n\r\n{ \
-                    \"vcpu_count\": 0, \
-                    \"mem_size_mib\": 0, \
-                    \"ht_enabled\": true \
-                }",
+                http_request("PUT", "/machine-config", &body).as_bytes()
             )
             .unwrap();
         assert!(connection.try_read().is_ok());
@@ -715,14 +710,10 @@ pub(crate) mod tests {
     fn test_try_from_put_metrics() {
         let (mut sender, receiver) = UnixStream::pair().unwrap();
         let mut connection = HttpConnection::new(receiver);
-
-        let req_as_bytes = b"PUT /metrics HTTP/1.1\r\n\
-                Content-Type: application/json\r\n\
-                Content-Length: 28\r\n\r\n{ \
-                \"metrics_path\": \"string\" \
-            }";
-
-        sender.write_all(req_as_bytes).unwrap();
+        let body = "{ \
+            \"metrics_path\": \"string\" \
+        }";
+        sender.write_all(http_request("PUT", "/metrics", &body).as_bytes()).unwrap();
         assert!(connection.try_read().is_ok());
         let req = connection.pop_parsed_request().unwrap();
         assert!(ParsedRequest::try_from_request(&req).is_ok());
@@ -732,22 +723,19 @@ pub(crate) mod tests {
     fn test_try_from_put_mmds() {
         let (mut sender, receiver) = UnixStream::pair().unwrap();
         let mut connection = HttpConnection::new(receiver);
+        let body = "{}";
         sender
             .write_all(
-                b"PUT /mmds HTTP/1.1\r\n\
-                Content-Type: application/json\r\n\
-                Content-Length: 2\r\n\r\n{}",
+                http_request("PUT", "/mmds", &body).as_bytes()
             )
             .unwrap();
         assert!(connection.try_read().is_ok());
         let req = connection.pop_parsed_request().unwrap();
         assert!(ParsedRequest::try_from_request(&req).is_ok());
-
+        let body = "{\"ipv4_address\":\"169.254.170.2\"}";
         sender
             .write_all(
-                b"PUT /mmds/config HTTP/1.1\r\n\
-                Content-Type: application/json\r\n\
-                Content-Length: 32\r\n\r\n{\"ipv4_address\":\"169.254.170.2\"}",
+                http_request("PUT", "/mmds", &body).as_bytes()
             )
             .unwrap();
         assert!(connection.try_read().is_ok());
@@ -759,40 +747,39 @@ pub(crate) mod tests {
     fn test_try_from_put_netif() {
         let (mut sender, receiver) = UnixStream::pair().unwrap();
         let mut connection = HttpConnection::new(receiver);
+        let body = "{ \
+            \"iface_id\": \"string\", \
+            \"guest_mac\": \"12:34:56:78:9a:BC\", \
+            \"host_dev_name\": \"string\", \
+            \"allow_mmds_requests\": true, \
+            \"rx_rate_limiter\": { \
+                \"bandwidth\": { \
+                    \"size\": 0, \
+                    \"one_time_burst\": 0, \
+                    \"refill_time\": 0 \
+                }, \
+                \"ops\": { \
+                    \"size\": 0, \
+                    \"one_time_burst\": 0, \
+                    \"refill_time\": 0 \
+                } \
+            }, \
+            \"tx_rate_limiter\": { \
+                \"bandwidth\": { \
+                    \"size\": 0, \
+                    \"one_time_burst\": 0, \
+                    \"refill_time\": 0 \
+                }, \
+                \"ops\": { \
+                    \"size\": 0, \
+                    \"one_time_burst\": 0, \
+                    \"refill_time\": 0 \
+                } \
+            } \
+        }";
         sender
             .write_all(
-                b"PUT /network-interfaces/string HTTP/1.1\r\n\
-                Content-Type: application/json\r\n\
-                Content-Length: 416\r\n\r\n{ \
-                \"iface_id\": \"string\", \
-                \"guest_mac\": \"12:34:56:78:9a:BC\", \
-                \"host_dev_name\": \"string\", \
-                \"allow_mmds_requests\": true, \
-                \"rx_rate_limiter\": { \
-                    \"bandwidth\": { \
-                        \"size\": 0, \
-                        \"one_time_burst\": 0, \
-                        \"refill_time\": 0 \
-                    }, \
-                    \"ops\": { \
-                        \"size\": 0, \
-                        \"one_time_burst\": 0, \
-                        \"refill_time\": 0 \
-                    } \
-                }, \
-                \"tx_rate_limiter\": { \
-                    \"bandwidth\": { \
-                        \"size\": 0, \
-                        \"one_time_burst\": 0, \
-                        \"refill_time\": 0 \
-                    }, \
-                    \"ops\": { \
-                        \"size\": 0, \
-                        \"one_time_burst\": 0, \
-                        \"refill_time\": 0 \
-                    } \
-                } \
-            }",
+                http_request("PUT", "/network-interfaces/string", &body).as_bytes()
             )
             .unwrap();
         assert!(connection.try_read().is_ok());
@@ -805,31 +792,27 @@ pub(crate) mod tests {
     fn test_try_from_put_snapshot() {
         let (mut sender, receiver) = UnixStream::pair().unwrap();
         let mut connection = HttpConnection::new(receiver);
-
+        let body = "{ \
+            \"snapshot_path\": \"foo\", \
+            \"mem_file_path\": \"bar\", \
+            \"version\": \"0.23.0\" \
+        }";
         sender
             .write_all(
-                b"PUT /snapshot/create HTTP/1.1\r\n\
-                Content-Type: application/json\r\n\
-                Content-Length: 71\r\n\r\n{ \
-                \"snapshot_path\": \"foo\", \
-                \"mem_file_path\": \"bar\", \
-                \"version\": \"0.23.0\" \
-            }",
+                http_request("PUT", "/snapshot/create", &body).as_bytes()
             )
             .unwrap();
         assert!(connection.try_read().is_ok());
         let req = connection.pop_parsed_request().unwrap();
         assert!(ParsedRequest::try_from_request(&req).is_ok());
-
+        let body = "{ \
+            \"snapshot_path\": \"foo\", \
+            \"mem_file_path\": \"bar\", \
+            \"enable_diff_snapshots\": true \
+        }";
         sender
             .write_all(
-                b"PUT /snapshot/load HTTP/1.1\r\n\
-                Content-Type: application/json\r\n\
-                Content-Length: 81\r\n\r\n{ \
-                \"snapshot_path\": \"foo\", \
-                \"mem_file_path\": \"bar\", \
-                \"enable_diff_snapshots\": true \
-            }",
+                http_request("PUT", "/snapshot/load", &body).as_bytes()
             )
             .unwrap();
 
@@ -842,14 +825,12 @@ pub(crate) mod tests {
     fn test_try_from_patch_vm() {
         let (mut sender, receiver) = UnixStream::pair().unwrap();
         let mut connection = HttpConnection::new(receiver);
-
+        let body = "{ \
+            \"state\": \"Paused\" \
+        }";
         sender
             .write_all(
-                b"PATCH /vm HTTP/1.1\r\n\
-                Content-Type: application/json\r\n\
-                Content-Length: 21\r\n\r\n{ \
-                \"state\": \"Paused\" \
-            }",
+                http_request("PATCH", "/vm", &body).as_bytes()
             )
             .unwrap();
         assert!(connection.try_read().is_ok());
@@ -861,15 +842,14 @@ pub(crate) mod tests {
     fn test_try_from_put_vsock() {
         let (mut sender, receiver) = UnixStream::pair().unwrap();
         let mut connection = HttpConnection::new(receiver);
+        let body = "{ \
+            \"vsock_id\": \"string\", \
+            \"guest_cid\": 0, \
+            \"uds_path\": \"string\" \
+        }";
         sender
             .write_all(
-                b"PUT /vsock HTTP/1.1\r\n\
-                Content-Type: application/json\r\n\
-                Content-Length: 62\r\n\r\n{ \
-                \"vsock_id\": \"string\", \
-                \"guest_cid\": 0, \
-                \"uds_path\": \"string\" \
-            }",
+                http_request("PUT", "/vsock", &body).as_bytes()
             )
             .unwrap();
         assert!(connection.try_read().is_ok());
@@ -881,24 +861,21 @@ pub(crate) mod tests {
     fn test_try_from_patch_balloon() {
         let (mut sender, receiver) = UnixStream::pair().unwrap();
         let mut connection = HttpConnection::new(receiver);
+        let body = "{ \"amount_mb\": 1 }";
         sender
             .write_all(
-                b"PATCH /balloon HTTP/1.1\r\n\
-                Content-Type: application/json\r\n\
-                Content-Length: 18\r\n\r\n{ \"amount_mb\": 1 }",
+                http_request("PATCH", "/balloon", &body).as_bytes()
             )
             .unwrap();
         assert!(connection.try_read().is_ok());
         let req = connection.pop_parsed_request().unwrap();
         assert!(ParsedRequest::try_from_request(&req).is_ok());
-
+        let body = "{ \
+            \"stats_polling_interval_s\": 1 \
+        }";
         sender
             .write_all(
-                b"PATCH /balloon/statistics HTTP/1.1\r\n\
-                Content-Type: application/json\r\n\
-                Content-Length: 33\r\n\r\n{ \
-                \"stats_polling_interval_s\": 1 \
-            }",
+                http_request("PATCH", "/balloon/statistics", &body).as_bytes()
             )
             .unwrap();
         assert!(connection.try_read().is_ok());
@@ -910,14 +887,13 @@ pub(crate) mod tests {
     fn test_try_from_patch_drives() {
         let (mut sender, receiver) = UnixStream::pair().unwrap();
         let mut connection = HttpConnection::new(receiver);
+        let body = "{ \
+            \"drive_id\": \"string\", \
+            \"path_on_host\": \"string\" \
+        }";
         sender
             .write_all(
-                b"PATCH /drives/string HTTP/1.1\r\n\
-                Content-Type: application/json\r\n\
-                Content-Length: 50\r\n\r\n{ \
-                \"drive_id\": \"string\", \
-                \"path_on_host\": \"string\" \
-            }",
+                http_request("PATCH", "/drives/string", &body).as_bytes()
             )
             .unwrap();
         assert!(connection.try_read().is_ok());
@@ -929,31 +905,28 @@ pub(crate) mod tests {
     fn test_try_from_patch_machine_config() {
         let (mut sender, receiver) = UnixStream::pair().unwrap();
         let mut connection = HttpConnection::new(receiver);
+        let body = "{ \
+            \"vcpu_count\": 0, \
+            \"mem_size_mib\": 0, \
+            \"ht_enabled\": true \
+        }";
         sender
             .write_all(
-                b"PATCH /machine-config HTTP/1.1\r\n\
-                Content-Type: application/json\r\n\
-                Content-Length: 58\r\n\r\n{ \
-                \"vcpu_count\": 0, \
-                \"mem_size_mib\": 0, \
-                \"ht_enabled\": true \
-            }",
+                http_request("PATCH", "/machine-config", &body).as_bytes()
             )
             .unwrap();
         assert!(connection.try_read().is_ok());
         let req = connection.pop_parsed_request().unwrap();
         assert!(ParsedRequest::try_from_request(&req).is_ok());
-
+        let body = "{ \
+            \"vcpu_count\": 0, \
+            \"mem_size_mib\": 0, \
+            \"ht_enabled\": true, \
+            \"cpu_template\": \"C3\" \
+        }";
         sender
             .write_all(
-                b"PATCH /machine-config HTTP/1.1\r\n\
-                Content-Type: application/json\r\n\
-                Content-Length: 80\r\n\r\n{ \
-                \"vcpu_count\": 0, \
-                \"mem_size_mib\": 0, \
-                \"ht_enabled\": true, \
-                \"cpu_template\": \"C3\" \
-            }",
+                http_request("PATCH", "/machine-config", &body).as_bytes()
             )
             .unwrap();
         assert!(connection.try_read().is_ok());
@@ -968,11 +941,10 @@ pub(crate) mod tests {
     fn test_try_from_patch_mmds() {
         let (mut sender, receiver) = UnixStream::pair().unwrap();
         let mut connection = HttpConnection::new(receiver);
+        let body = "{}";
         sender
             .write_all(
-                b"PATCH /mmds HTTP/1.1\r\n\
-                Content-Type: application/json\r\n\
-                Content-Length: 2\r\n\r\n{}",
+                http_request("PATCH", "/mmds", &body).as_bytes()
             )
             .unwrap();
         assert!(connection.try_read().is_ok());
@@ -984,13 +956,12 @@ pub(crate) mod tests {
     fn test_try_from_patch_netif() {
         let (mut sender, receiver) = UnixStream::pair().unwrap();
         let mut connection = HttpConnection::new(receiver);
+        let body = "{ \
+            \"iface_id\": \"string\" \
+        }";
         sender
             .write_all(
-                b"PATCH /network-interfaces/string HTTP/1.1\r\n\
-                Content-Type: application/json\r\n\
-                Content-Length: 24\r\n\r\n{ \
-                \"iface_id\": \"string\" \
-            }",
+                http_request("PATCH", "/network-interfaces/string", &body).as_bytes()
             )
             .unwrap();
         assert!(connection.try_read().is_ok());
