@@ -294,15 +294,45 @@ pub(crate) mod tests {
         }
     }
 
+    fn http_response(body: &str, status_code: i32) -> String {
+        let header = format!(
+            "HTTP/1.1 {} \r\n\
+             Server: Firecracker API\r\n\
+             Connection: keep-alive\r\n",
+             status_code
+        );
+        
+        let content = format!(
+            "Content-Type: application/json\r\n\
+             Content-Length: {}\r\n\r\n{}",
+             body.len(),
+             body,
+        );
+
+        if status_code == 204 { // No Content
+            return format!("{}{}", header, "\r\n");
+        }
+        format!("{}{}", header, content)
+    }
+
+    fn http_request(request_type: &str, endpoint: &str, body: &str) -> String {
+        format!("{} {} HTTP/1.1\r\n\
+            Content-Type: application/json\r\n\
+            Content-Length: {}\r\n\r\n\
+            {}",
+            request_type,
+            endpoint,
+            body.len(),
+            body 
+        )
+    }
+
     #[test]
     fn test_missing_slash() {
         let (mut sender, receiver) = UnixStream::pair().unwrap();
         let mut connection = HttpConnection::new(receiver);
-        sender
-            .write_all(
-                b"GET none HTTP/1.1\r\n\
-                Content-Type: text/plain\r\n\
-                Content-Length: 4\r\n\r\nbody",
+        sender.write_all(
+                http_request("GET", "none", "body").as_bytes()
             )
             .unwrap();
         assert!(connection.try_read().is_ok());
@@ -331,9 +361,7 @@ pub(crate) mod tests {
         let mut connection = HttpConnection::new(receiver);
         sender
             .write_all(
-                b"GET /mmds HTTP/1.1\r\n\
-                Content-Type: text/plain\r\n\
-                Content-Length: 4\r\n\r\nbody",
+                http_request("GET", "/mmds", "body").as_bytes()
             )
             .unwrap();
         assert!(connection.try_read().is_ok());
@@ -400,16 +428,7 @@ pub(crate) mod tests {
             Error::Generic(StatusCode::BadRequest, "message".to_string()).into();
         assert!(response.write_all(&mut buf).is_ok());
         let body = ApiServer::json_fault_message("message");
-        let expected_response = format!(
-            "HTTP/1.1 400 \r\n\
-             Server: Firecracker API\r\n\
-             Connection: keep-alive\r\n\
-             Content-Type: application/json\r\n\
-             Content-Length: {}\r\n\r\n\
-             {}",
-            body.len(),
-            body
-        );
+        let expected_response = http_response(&body, 400);
         assert_eq!(buf.into_inner(), expected_response.as_bytes());
 
         // Empty ID error.
@@ -417,16 +436,7 @@ pub(crate) mod tests {
         let response: Response = Error::EmptyID.into();
         assert!(response.write_all(&mut buf).is_ok());
         let body = ApiServer::json_fault_message("The ID cannot be empty.");
-        let expected_response = format!(
-            "HTTP/1.1 400 \r\n\
-             Server: Firecracker API\r\n\
-             Connection: keep-alive\r\n\
-             Content-Type: application/json\r\n\
-             Content-Length: {}\r\n\r\n\
-             {}",
-            body.len(),
-            body,
-        );
+        let expected_response = http_response(&body, 400);
         assert_eq!(buf.into_inner(), expected_response.as_bytes());
 
         // Invalid ID error.
@@ -436,16 +446,7 @@ pub(crate) mod tests {
         let body = ApiServer::json_fault_message(
             "API Resource IDs can only contain alphanumeric characters and underscores.",
         );
-        let expected_response = format!(
-            "HTTP/1.1 400 \r\n\
-             Server: Firecracker API\r\n\
-             Connection: keep-alive\r\n\
-             Content-Type: application/json\r\n\
-             Content-Length: {}\r\n\r\n\
-             {}",
-            body.len(),
-            body,
-        );
+        let expected_response = http_response(&body, 400);
         assert_eq!(buf.into_inner(), expected_response.as_bytes());
 
         // Invalid path or method error.
@@ -457,16 +458,7 @@ pub(crate) mod tests {
             std::str::from_utf8(Method::Get.raw()).unwrap(),
             "path"
         ));
-        let expected_response = format!(
-            "HTTP/1.1 400 \r\n\
-             Server: Firecracker API\r\n\
-             Connection: keep-alive\r\n\
-             Content-Type: application/json\r\n\
-             Content-Length: {}\r\n\r\n\
-             {}",
-            body.len(),
-            body,
-        );
+        let expected_response = http_response(&body, 400);
         assert_eq!(buf.into_inner(), expected_response.as_bytes());
 
         // Serde error.
@@ -478,16 +470,7 @@ pub(crate) mod tests {
             "An error occurred when deserializing the json body of a request: \
              EOF while parsing a value at line 1 column 0.",
         );
-        let expected_response = format!(
-            "HTTP/1.1 400 \r\n\
-             Server: Firecracker API\r\n\
-             Connection: keep-alive\r\n\
-             Content-Type: application/json\r\n\
-             Content-Length: {}\r\n\r\n\
-             {}",
-            body.len(),
-            body,
-        );
+        let expected_response = http_response(&body, 400);
         assert_eq!(buf.into_inner(), expected_response.as_bytes());
     }
 
@@ -513,10 +496,7 @@ pub(crate) mod tests {
         let mut buf = Cursor::new(vec![0]);
         let response = ParsedRequest::convert_to_response(&Ok(VmmData::Empty));
         assert!(response.write_all(&mut buf).is_ok());
-        let expected_response = "HTTP/1.1 204 \r\n\
-                                 Server: Firecracker API\r\n\
-                                 Connection: keep-alive\r\n\r\n"
-            .to_string();
+        let expected_response = http_response("", 204);
         assert_eq!(buf.into_inner(), expected_response.as_bytes());
 
         // With Machine Config Vmm data.
@@ -525,14 +505,7 @@ pub(crate) mod tests {
             VmConfig::default(),
         )));
         assert!(response.write_all(&mut buf).is_ok());
-        let expected_response = format!(
-            "HTTP/1.1 200 \r\n\
-             Server: Firecracker API\r\n\
-             Connection: keep-alive\r\n\
-             Content-Type: application/json\r\n\
-             Content-Length: 122\r\n\r\n{}",
-            VmConfig::default().to_string()
-        );
+        let expected_response = http_response(&VmConfig::default().to_string(), 200);
         assert_eq!(buf.into_inner(), expected_response.as_bytes());
 
         // With Balloon Stats Vmm data.
@@ -543,14 +516,7 @@ pub(crate) mod tests {
         let response =
             ParsedRequest::convert_to_response(&Ok(VmmData::BalloonStats(stats.clone())));
         assert!(response.write_all(&mut buf).is_ok());
-        let expected_response = format!(
-            "HTTP/1.1 200 \r\n\
-             Server: Firecracker API\r\n\
-             Connection: keep-alive\r\n\
-             Content-Type: application/json\r\n\
-             Content-Length: 88\r\n\r\n{}",
-            serde_json::to_string(&stats).unwrap(),
-        );
+        let expected_response = http_response(&serde_json::to_string(&stats).unwrap(), 200);
         assert_eq!(buf.into_inner(), expected_response.as_bytes());
 
         // Error.
@@ -560,15 +526,7 @@ pub(crate) mod tests {
         let response = ParsedRequest::convert_to_response(&Err(error));
         response.write_all(&mut buf).unwrap();
 
-        let expected_response = format!(
-            "HTTP/1.1 400 \r\n\
-             Server: Firecracker API\r\n\
-             Connection: keep-alive\r\n\
-             Content-Type: application/json\r\n\
-             Content-Length: {}\r\n\r\n{}",
-            json.len(),
-            json,
-        );
+        let expected_response = http_response(&json, 400);
         assert_eq!(buf.into_inner(), expected_response.as_bytes());
     }
 
@@ -630,13 +588,12 @@ pub(crate) mod tests {
     fn test_try_from_put_actions() {
         let (mut sender, receiver) = UnixStream::pair().unwrap();
         let mut connection = HttpConnection::new(receiver);
+        let body = "{ \
+            \"action_type\": \"FlushMetrics\" \
+            }";
         sender
             .write_all(
-                b"PUT /actions HTTP/1.1\r\n\
-                Content-Type: application/json\r\n\
-                Content-Length: 33\r\n\r\n{ \
-                \"action_type\": \"FlushMetrics\" \
-                }",
+                http_request("PUT", "/actions", &body).as_bytes()
             )
             .unwrap();
         assert!(connection.try_read().is_ok());
@@ -648,15 +605,14 @@ pub(crate) mod tests {
     fn test_try_from_put_balloon() {
         let (mut sender, receiver) = UnixStream::pair().unwrap();
         let mut connection = HttpConnection::new(receiver);
+        let body = "{ \
+            \"amount_mb\": 0, \
+            \"deflate_on_oom\": false, \
+            \"stats_polling_interval_s\": 0 \
+            }";
         sender
             .write_all(
-                b"PUT /balloon HTTP/1.1\r\n\
-                Content-Type: application/json\r\n\
-                Content-Length: 74\r\n\r\n{ \
-                \"amount_mb\": 0, \
-                \"deflate_on_oom\": false, \
-                \"stats_polling_interval_s\": 0 \
-                }",
+                http_request("PUT", "/balloon", &body).as_bytes()
             )
             .unwrap();
         assert!(connection.try_read().is_ok());
@@ -668,14 +624,13 @@ pub(crate) mod tests {
     fn test_try_from_put_boot() {
         let (mut sender, receiver) = UnixStream::pair().unwrap();
         let mut connection = HttpConnection::new(receiver);
+        let body = "{ \
+            \"kernel_image_path\": \"string\", \
+            \"boot_args\": \"string\" \
+            }";
         sender
             .write_all(
-                b"PUT /boot-source HTTP/1.1\r\n\
-                Content-Type: application/json\r\n\
-                Content-Length: 56\r\n\r\n{ \
-                \"kernel_image_path\": \"string\", \
-                \"boot_args\": \"string\" \
-                }",
+                http_request("PUT", "/boot-source",  &body).as_bytes()
             )
             .unwrap();
         assert!(connection.try_read().is_ok());
@@ -687,29 +642,28 @@ pub(crate) mod tests {
     fn test_try_from_put_drives() {
         let (mut sender, receiver) = UnixStream::pair().unwrap();
         let mut connection = HttpConnection::new(receiver);
+        let body = "{ \
+            \"drive_id\": \"string\", \
+            \"path_on_host\": \"string\", \
+            \"is_root_device\": true, \
+            \"partuuid\": \"string\", \
+            \"is_read_only\": true, \
+            \"rate_limiter\": { \
+                \"bandwidth\": { \
+                    \"size\": 0, \
+                    \"one_time_burst\": 0, \
+                    \"refill_time\": 0 \
+                }, \
+                \"ops\": { \
+                    \"size\": 0, \
+                    \"one_time_burst\": 0, \
+                    \"refill_time\": 0 \
+                } \
+            } \
+        }";
         sender
             .write_all(
-                b"PUT /drives/string HTTP/1.1\r\n\
-                Content-Type: application/json\r\n\
-                Content-Length: 266\r\n\r\n{ \
-                \"drive_id\": \"string\", \
-                \"path_on_host\": \"string\", \
-                \"is_root_device\": true, \
-                \"partuuid\": \"string\", \
-                \"is_read_only\": true, \
-                \"rate_limiter\": { \
-                    \"bandwidth\": { \
-                        \"size\": 0, \
-                        \"one_time_burst\": 0, \
-                        \"refill_time\": 0 \
-                    }, \
-                    \"ops\": { \
-                        \"size\": 0, \
-                        \"one_time_burst\": 0, \
-                        \"refill_time\": 0 \
-                    } \
-                } \
-            }",
+                http_request("PUT", "/drives/string", &body).as_bytes()
             )
             .unwrap();
         assert!(connection.try_read().is_ok());
